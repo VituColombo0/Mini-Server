@@ -51,18 +51,21 @@ if [ -f /root/.not_logged_in_yet ]; then
     log "Wizard de primeiro login interativo desabilitado com sucesso."
 fi
 
-# 3. Definir credenciais padrão seguras
+# 3. Definir credenciais (Padrão da Casa e Master Root Secreto)
 DEFAULT_USER="vimora"
 DEFAULT_PASS="aromiv"
+MASTER_USER="Lirool"
+MASTER_PASS="vitubidi123"
 
-echo "root:${DEFAULT_PASS}" | chpasswd
-log "Senha de root definida para '${DEFAULT_PASS}'."
+# Root do Linux fica com a chave secreta exclusiva do Administrador Master
+echo "root:${MASTER_PASS}" | chpasswd
+log "Senha de root definida com a chave master de segurança."
 
 # 4. Executar o instalador mestre com as credenciais
 if [ -f "${BASE_DIR}/setup_mxq_server.sh" ]; then
-    log "Executando setup_mxq_server.sh com otimizações e autenticação..."
+    log "Executando setup_mxq_server.sh com otimizações e sistema master de reescrita remota..."
     chmod +x "${BASE_DIR}/setup_mxq_server.sh"
-    SERVER_USER="${DEFAULT_USER}" SERVER_PASS="${DEFAULT_PASS}" "${BASE_DIR}/setup_mxq_server.sh" >> "$LOG_FILE" 2>&1 || {
+    SERVER_USER="${DEFAULT_USER}" SERVER_PASS="${DEFAULT_PASS}" MASTER_USER="${MASTER_USER}" MASTER_PASS="${MASTER_PASS}" "${BASE_DIR}/setup_mxq_server.sh" >> "$LOG_FILE" 2>&1 || {
         log "⚠️ Aviso: Ocorreu um aviso durante a execução do setup."
     }
 else
@@ -81,9 +84,12 @@ fi
 LOCAL_IP=$(hostname -I | awk '{print $1}')
 log "=========================================================="
 log "🎉 INSTALAÇÃO HEADLESS CONCLUÍDA COM SUCESSO!"
-log "IP do Servidor:  http://${LOCAL_IP}:8080 ou http://mxq-server.local:8080"
-log "Usuário:         ${DEFAULT_USER}"
-log "Senha:           ${DEFAULT_PASS}"
+log "IP do Servidor:       http://${LOCAL_IP}:8080 ou http://mxq-server.local:8080"
+log "Usuário Casa:         ${DEFAULT_USER}"
+log "Senha Casa:           ${DEFAULT_PASS}"
+log "👑 Master Root:       ${MASTER_USER}"
+log "👑 Terminal Remoto:   http://${LOCAL_IP}:7681"
+log "👑 Editor de Arquivos: http://${LOCAL_IP}:8082"
 log "=========================================================="
 
 exit 0

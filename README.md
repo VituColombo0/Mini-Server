@@ -76,16 +76,34 @@ sudo ./prepare_sd_card.sh /media/$USER/armbi_root seunome suasenha123
 
 Após o término da instalação, você pode acessar todos os serviços pelo navegador de qualquer celular ou PC conectado no mesmo Wi-Fi/rede:
 
+### 🏠 Acesso da Casa / Família (Usuário Padrão)
+
 | Serviço | URL de Acesso | Login Padrão | Descrição |
 |---|---|---|---|
 | **Painel Geral** | `http://mxq-server.local:8080` | `vimora` / `aromiv` | Dashboard unificado protegido por senha |
 | **AdGuard Home** | `http://mxq-server.local:3000` | Definido no 1º acesso | Bloqueador de anúncios de rede |
-| **FileBrowser (Web)** | `http://mxq-server.local:8082` | `vimora` / `aromiv` | Gerenciador de arquivos na nuvem |
+| **FileBrowser (Web)** | `http://mxq-server.local:8082` | `vimora` / `aromiv` | Nuvem pessoal (Acesso à pasta compartilhada) |
 | **Uptime Kuma** | `http://mxq-server.local:3001` | Definido no 1º acesso | Monitor de disponibilidade |
 | **Portainer** | `http://mxq-server.local:9000` | Definido no 1º acesso | Gestão de Containers Docker |
 | **Samba (Arquivos)** | `\\mxq-server.local\Compartilhado` | `vimora` / `aromiv` | Rede Windows/Mac/Android |
 
-> **Dica:** Um arquivo com todas as senhas e links é salvo automaticamente na própria TV Box em `/root/server-credentials.txt` e na pasta de rede compartilhada `README_CREDENCIAIS.txt`.
+---
+
+### 👑 Acesso Master Secreto & Reescrita Remota (Apenas Administrador)
+
+Você **NUNCA mais precisará tirar o cartão MicroSD da TV Box** para alterar arquivos, corrigir bugs, modificar configurações ou instalar novos recursos:
+
+| Painel Master | URL de Acesso | Credenciais | Poderes / Funcionalidades |
+|---|---|---|---|
+| **💻 Console Terminal Web** | `http://<IP>:7681` | `Lirool` / `vitubidi123` | Terminal Bash interativo direto no navegador como ROOT. Permite rodar comandos, reiniciar serviços (`systemctl`), etc. |
+| **📝 Editor de Arquivos Root** | `http://<IP>:8082` | `Lirool` / `vitubidi123` | Navega e edita **qualquer arquivo de todo o sistema operacional** (`/etc`, `/root`, `/var`, `/boot`) com editor de texto web embutido. |
+| **🔒 Acesso SSH Master** | `ssh Lirool@<IP>` (porta 22) | `Lirool` / `vitubidi123` | Acesso SSH nativo com `sudo` total sem senha (`NOPASSWD: ALL`). |
+| **🔄 Atualizador OTA Nuvem** | Comando `mxq-update` | No terminal web/SSH | Sincroniza e reaplica novos scripts e correções direto do repositório GitHub sem tocar no cartão. |
+| **🌍 Controle Fora de Casa** | Tailscale VPN | Conta Pessoal | Conecte-se aos painéis acima pelo 4G/5G de qualquer lugar do mundo. |
+
+> **Segurança:** O usuário Master `Lirool` possui permissão total de superusuário (`NOPASSWD: ALL`) e a senha de root do sistema Linux é protegida exclusivamente com `vitubidi123`.
+
+> **Dica:** Um arquivo com todas as senhas e links é salvo automaticamente na própria TV Box em `/root/server-credentials.txt` (com permissões restritas 600).
 
 ---
 

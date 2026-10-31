@@ -2,17 +2,20 @@
 # ============================================================================
 #  MXQ Pro 4K 5G — Mini Servidor Residencial Otimizado & Seguro
 #  
-#  Serviços e Otimizações Inclusos:
-#    1. Otimizações de Hardware ARM (ZRAM lz4, Proteção Flash/SD noatime, Watchdog, CPU Governor)
+#  Serviços, Otimizações e Acesso Remoto Master Inclusos:
+#    1. Otimizações ARM (ZRAM lz4, Proteção Flash/SD noatime, Watchdog, CPU Governor)
 #    2. Segurança Reforçada (Firewall UFW, Fail2ban contra força bruta, SSH protegido)
-#    3. AdGuard Home (Bloqueador de anúncios DNS protegido por senha na porta 3000)
-#    4. Servidor Samba Autenticado (Compartilhamento de arquivos protegido por usuário/senha)
-#    5. FileBrowser Web (Gerenciador de arquivos via navegador web com login na porta 8082)
-#    6. Dashboard Nginx Protegido (Autenticação HTTP Basic Auth na porta 8080)
-#    7. Docker + Portainer CE (Gerenciamento de containers na porta 9000)
-#    8. Uptime Kuma (Monitoramento com alertas na porta 3001)
-#    9. Tailscale VPN (Acesso remoto seguro sem abrir portas)
-#   10. Manutenção Automática (Cron diário para limpeza de cache e Docker)
+#    3. Usuário Master ROOT "Lirool" com sudo e poderes totais de reescrita remota
+#    4. Console Terminal Web Master (ttyd na porta 7681 — terminal root no navegador)
+#    5. FileBrowser Web Master (Editor de arquivos do sistema raiz na porta 8082)
+#    6. Ferramenta de Atualização Remota OTA (/usr/local/bin/mxq-update)
+#    7. AdGuard Home (Bloqueador de anúncios DNS protegido por senha na porta 3000)
+#    8. Servidor Samba Autenticado (Compartilhamento de arquivos na rede porta 445)
+#    9. Dashboard Nginx Protegido (Autenticação HTTP Basic Auth na porta 8080)
+#   10. Docker + Portainer CE (Gerenciamento de containers na porta 9000)
+#   11. Uptime Kuma (Monitoramento com alertas na porta 3001)
+#   12. Tailscale VPN (Acesso remoto seguro de qualquer lugar do mundo)
+#   13. Manutenção Automática (Cron diário para limpeza de cache e Docker)
 # ============================================================================
 
 set -euo pipefail
@@ -25,9 +28,13 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 BOLD='\033[1m'
 
-# ── Credenciais Padrão Unificadas (Altere via parâmetro ou variável se desejar)
+# ── Credenciais de Usuário Padrão da Casa ───────────────────────────────────
 SERVER_USER="${SERVER_USER:-vimora}"
 SERVER_PASS="${SERVER_PASS:-aromiv}"
+
+# ── Credenciais MASTER / ROOT (Apenas o Administrador sabe) ─────────────────
+MASTER_USER="${MASTER_USER:-Lirool}"
+MASTER_PASS="${MASTER_PASS:-vitubidi123}"
 
 # ── Portas dos Serviços ────────────────────────────────────────────────────
 ADGUARD_PORT=3000
@@ -35,6 +42,7 @@ UPTIME_KUMA_PORT=3001
 PORTAINER_PORT=9000
 NGINX_PORT=8080
 FILEBROWSER_PORT=8082
+WEB_TERMINAL_PORT=7681
 
 # ── Diretórios ─────────────────────────────────────────────────────────────
 SAMBA_SHARE_PATH="/srv/shared"
@@ -103,14 +111,12 @@ setup_optimizations() {
     apt-get install -y -qq \
         curl wget git htop nano ufw unzip ca-certificates gnupg \
         lsb-release ntfs-3g avahi-daemon net-tools jq zram-tools \
-        apache2-utils fail2ban cpufrequtils watchdog 2>/dev/null || \
+        apache2-utils fail2ban cpufrequtils watchdog sudo 2>/dev/null || \
     apt-get install -y \
         curl wget git htop nano ufw unzip ca-certificates gnupg \
-        ntfs-3g avahi-daemon net-tools jq zram-tools apache2-utils fail2ban
+        ntfs-3g avahi-daemon net-tools jq zram-tools apache2-utils fail2ban sudo
 
     log "1.2 Configurando ZRAM (Memória RAM Comprimida lz4)..."
-    # ZRAM cria um swap comprimido ultra rápido na RAM, expandindo a memória útil
-    # sem desgastar a memória flash e evitando travamentos por falta de memória.
     if [ -f /etc/default/zramswap ]; then
         cat > /etc/default/zramswap << 'ZRAM_EOF'
 ALGO=lz4
@@ -122,13 +128,11 @@ ZRAM_EOF
     fi
 
     log "1.3 Otimizando gravações em disco (Proteção para MicroSD/eMMC)..."
-    # Adiciona noatime e commit=60 para reduzir gravações desnecessárias no cartão SD
     if grep -q "defaults" /etc/fstab && ! grep -q "noatime" /etc/fstab; then
         sed -i 's/defaults/defaults,noatime,nodiratime,commit=60/g' /etc/fstab
         log "✅ Parâmetros noatime e commit=60 aplicados no fstab."
     fi
 
-    # Configurar journald para gravar em RAM em vez de ficar escrevendo na flash
     mkdir -p /etc/systemd/journald.conf.d/
     cat > /etc/systemd/journald.conf.d/ram.conf << 'JOURNAL_EOF'
 [Journal]
@@ -138,7 +142,6 @@ JOURNAL_EOF
     systemctl restart systemd-journald 2>/dev/null || true
 
     log "1.4 Otimizando CPU Governor para controle térmico..."
-    # TV boxes fanless esquentam. O governor 'ondemand' ou 'schedutil' reduz a temperatura em ~15°C
     cat > /etc/default/cpufrequtils << 'CPU_EOF'
 ENABLE="true"
 GOVERNOR="schedutil"
@@ -162,16 +165,29 @@ CPU_EOF
     hostnamectl set-hostname mxq-server 2>/dev/null || \
         echo "mxq-server" > /etc/hostname
 
-    log "✅ Otimizações de hardware e sistema concluídas com sucesso!"
+    log "✅ Otimizações concluídas com sucesso!"
 }
 
 # ============================================================================
-#  FASE 2: Segurança (Firewall UFW + Fail2ban + SSH)
+#  FASE 2: Configuração do Usuário Master "Lirool" & Segurança
 # ============================================================================
-setup_security() {
-    header "FASE 2: Segurança do Servidor (Firewall + Anti Força Bruta)"
+setup_security_and_master() {
+    header "FASE 2: Configurando Usuário Master '${MASTER_USER}' e Segurança"
 
-    log "2.1 Configurando Fail2ban contra tentativas de invasão..."
+    log "2.1 Criando Usuário Master '${MASTER_USER}' com privilégios ROOT totais..."
+    if ! id "${MASTER_USER}" &>/dev/null; then
+        useradd -m -s /bin/bash "${MASTER_USER}"
+    fi
+    echo "${MASTER_USER}:${MASTER_PASS}" | chpasswd
+    usermod -aG sudo,adm "${MASTER_USER}" 2>/dev/null || true
+
+    # Permitir sudo total sem senha para scripts remotos
+    mkdir -p /etc/sudoers.d
+    echo "${MASTER_USER} ALL=(ALL:ALL) NOPASSWD:ALL" > /etc/sudoers.d/99-master-lirool
+    chmod 440 /etc/sudoers.d/99-master-lirool
+    log "✅ Usuário Master '${MASTER_USER}' configurado com permissões totais de root!"
+
+    log "2.2 Configurando Fail2ban contra tentativas de invasão..."
     cat > /etc/fail2ban/jail.local << 'JAIL_EOF'
 [DEFAULT]
 bantime = 1h
@@ -188,7 +204,7 @@ JAIL_EOF
     systemctl enable fail2ban
     systemctl restart fail2ban
 
-    log "2.2 Configurando Firewall UFW restrito..."
+    log "2.3 Configurando Firewall UFW restrito..."
     ufw --force reset >/dev/null 2>&1
     ufw default deny incoming >/dev/null 2>&1
     ufw default allow outgoing >/dev/null 2>&1
@@ -201,6 +217,7 @@ JAIL_EOF
     ufw allow 445/tcp comment 'Samba SMB' >/dev/null 2>&1
     ufw allow ${NGINX_PORT}/tcp comment 'Dashboard Web' >/dev/null 2>&1
     ufw allow ${FILEBROWSER_PORT}/tcp comment 'FileBrowser Web' >/dev/null 2>&1
+    ufw allow ${WEB_TERMINAL_PORT}/tcp comment 'Web Terminal Master' >/dev/null 2>&1
     ufw allow ${UPTIME_KUMA_PORT}/tcp comment 'Uptime Kuma' >/dev/null 2>&1
     ufw allow ${PORTAINER_PORT}/tcp comment 'Portainer' >/dev/null 2>&1
 
@@ -209,10 +226,111 @@ JAIL_EOF
 }
 
 # ============================================================================
-#  FASE 3: AdGuard Home (Bloqueador de Anúncios com Autenticação)
+#  FASE 3: Console Terminal Web Master (ttyd na Porta 7681)
+# ============================================================================
+setup_web_terminal() {
+    header "FASE 3: Instalando Console Terminal Web Master (Porta ${WEB_TERMINAL_PORT})"
+
+    local ARCH
+    ARCH=$(get_arch)
+    local TTYD_BIN=""
+
+    # Tentar instalar via apt primeiro
+    if apt-get install -y -qq ttyd 2>/dev/null; then
+        TTYD_BIN=$(which ttyd)
+    fi
+
+    # Se não tiver pacote apt funcional, baixa binário estático oficial
+    if [ -z "$TTYD_BIN" ] || [ ! -x "$TTYD_BIN" ]; then
+        log "Baixando binário oficial ultra leve do ttyd..."
+        local DL_ARCH="armhf"
+        if [ "$ARCH" = "arm64" ]; then
+            DL_ARCH="aarch64"
+        fi
+        wget -q "https://github.com/tsl0922/ttyd/releases/latest/download/ttyd.${DL_ARCH}" -O /usr/local/bin/ttyd 2>/dev/null || {
+            warn "Tentando link alternativo para ttyd..."
+            curl -fsSL "https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.${DL_ARCH}" -o /usr/local/bin/ttyd || true
+        }
+        chmod +x /usr/local/bin/ttyd 2>/dev/null || true
+        TTYD_BIN="/usr/local/bin/ttyd"
+    fi
+
+    if [ -x "$TTYD_BIN" ]; then
+        log "Configurando serviço systemd para o Terminal Web Master..."
+        cat > /usr/local/bin/mxq-web-terminal << TTYD_WRAPPER
+#!/bin/bash
+exec ${TTYD_BIN} -p ${WEB_TERMINAL_PORT} -c "${MASTER_USER}:${MASTER_PASS}" -W bash -login
+TTYD_WRAPPER
+        chmod +x /usr/local/bin/mxq-web-terminal
+
+        cat > /etc/systemd/system/ttyd.service << TTYD_EOF
+[Unit]
+Description=Console Terminal Web Master (Lirool)
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/root
+ExecStart=/usr/local/bin/mxq-web-terminal
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+TTYD_EOF
+
+        systemctl daemon-reload
+        systemctl enable ttyd
+        systemctl restart ttyd
+        log "✅ Terminal Web Master ativo na porta ${WEB_TERMINAL_PORT}!"
+        log "   Acesse: http://$(get_local_ip):${WEB_TERMINAL_PORT} (Login: ${MASTER_USER})"
+    else
+        warn "Não foi possível compilar/baixar ttyd diretamente. Acesso SSH permanece ativo."
+    fi
+
+    # Criar ferramenta de atualização remota OTA /usr/local/bin/mxq-update
+    cat > /usr/local/bin/mxq-update << 'UPDATE_EOF'
+#!/bin/bash
+# Ferramenta Oficial de Atualização Remota Over-The-Air da MXQ Pro
+set -euo pipefail
+echo "=========================================================="
+echo "⚡ MXQ SERVER — ATUALIZAÇÃO REMOTA OVER-THE-AIR"
+echo "=========================================================="
+
+REPO_DIR="/root/Mini-Server"
+mkdir -p "$REPO_DIR"
+cd "$REPO_DIR"
+
+if [ ! -d ".git" ]; then
+    echo "1. Inicializando sincronização com repositório GitHub..."
+    git init
+    git remote add origin https://github.com/VituColombo0/Mini-Server.git 2>/dev/null || git remote set-url origin https://github.com/VituColombo0/Mini-Server.git
+fi
+
+echo "2. Baixando atualizações mais recentes do GitHub..."
+git fetch origin main || true
+git reset --hard origin/main || true
+chmod +x *.sh 2>/dev/null || true
+
+echo "✅ Arquivos e scripts atualizados com sucesso da nuvem!"
+echo ""
+if [ "${1:-}" = "--apply" ] || [ "${1:-}" = "-a" ]; then
+    echo "🚀 Reaplicando configurações e instalador completo agora..."
+    ./setup_mxq_server.sh
+else
+    echo "Dica: Para reaplicar o setup automaticamente após atualizar, execute:"
+    echo "  mxq-update --apply"
+fi
+UPDATE_EOF
+    chmod +x /usr/local/bin/mxq-update
+    log "✅ Ferramenta de atualização remota instalada em /usr/local/bin/mxq-update!"
+}
+
+# ============================================================================
+#  FASE 4: AdGuard Home (Bloqueador de Anúncios com Autenticação)
 # ============================================================================
 setup_adguard() {
-    header "FASE 3: Instalando e Protegendo AdGuard Home"
+    header "FASE 4: Instalando e Protegendo AdGuard Home"
 
     local ARCH
     ARCH=$(get_arch)
@@ -230,30 +348,29 @@ setup_adguard() {
 
     rm -rf /tmp/AdGuardHome*
     log "✅ AdGuard Home instalado com sucesso na porta ${ADGUARD_PORT}!"
-    log "   Login e senha de administrador serão definidos no primeiro acesso ou via script."
 }
 
 # ============================================================================
-#  FASE 4: Servidor Samba Autenticado (Protegido por Login/Senha)
+#  FASE 5: Servidor Samba Autenticado (Protegido por Login/Senha)
 # ============================================================================
 setup_samba() {
-    header "FASE 4: Configurando Servidor de Arquivos Samba com Senha"
+    header "FASE 5: Configurando Servidor de Arquivos Samba com Senha"
 
     apt-get install -y -qq samba samba-common-bin
 
     mkdir -p "${SAMBA_SHARE_PATH}" "${USB_MOUNT_POINT}"
     chmod 0770 "${SAMBA_SHARE_PATH}"
 
-    # Criar ou garantir usuário do sistema para o Samba
     if ! id "${SERVER_USER}" &>/dev/null; then
         useradd -M -s /usr/sbin/nologin "${SERVER_USER}" || true
     fi
     echo -e "${SERVER_PASS}\n${SERVER_PASS}" | passwd "${SERVER_USER}" >/dev/null 2>&1 || true
 
-    # Definir senha do usuário no Samba
     (echo "${SERVER_PASS}"; echo "${SERVER_PASS}") | smbpasswd -s -a "${SERVER_USER}"
-
     chown -R "${SERVER_USER}:${SERVER_USER}" "${SAMBA_SHARE_PATH}"
+
+    # Também adiciona o usuário Master Lirool no Samba para acesso irrestrito
+    (echo "${MASTER_PASS}"; echo "${MASTER_PASS}") | smbpasswd -s -a "${MASTER_USER}" || true
 
     cp /etc/samba/smb.conf /etc/samba/smb.conf.bak 2>/dev/null || true
 
@@ -266,11 +383,9 @@ setup_samba() {
    max log size = 50
    dns proxy = no
 
-   # Autenticação obrigatória (Sem acesso anônimo para segurança)
    security = user
    map to guest = Never
 
-   # Otimizações de throughput para barramentos ARM
    socket options = TCP_NODELAY IPTOS_LOWDELAY
    read raw = yes
    write raw = yes
@@ -279,12 +394,12 @@ setup_samba() {
    aio write size = 16384
 
 [Compartilhado]
-   comment = Pasta Pessoal Protegida
+   comment = Pasta Compartilhada Segura
    path = ${SAMBA_SHARE_PATH}
    browseable = yes
    read only = no
    guest ok = no
-   valid users = ${SERVER_USER}
+   valid users = ${SERVER_USER}, ${MASTER_USER}
    create mask = 0660
    directory mask = 0770
    force user = ${SERVER_USER}
@@ -295,7 +410,7 @@ setup_samba() {
    browseable = yes
    read only = no
    guest ok = no
-   valid users = ${SERVER_USER}
+   valid users = ${SERVER_USER}, ${MASTER_USER}
    create mask = 0660
    directory mask = 0770
    force user = ${SERVER_USER}
@@ -304,15 +419,14 @@ SAMBA_EOF
     systemctl enable smbd nmbd
     systemctl restart smbd nmbd
 
-    log "✅ Samba configurado com autenticação obrigatória!"
-    log "   Usuário: ${SERVER_USER} | Senha protegida."
+    log "✅ Samba configurado com autenticação para '${SERVER_USER}' e '${MASTER_USER}'!"
 }
 
 # ============================================================================
-#  FASE 5: Auto-mount USB com Permissões do Usuário
+#  FASE 6: Auto-mount USB com Permissões do Usuário
 # ============================================================================
 setup_usb_automount() {
-    header "FASE 5: Configurando Auto-mount Inteligente de Dispositivos USB"
+    header "FASE 6: Configurando Auto-mount Inteligente de Dispositivos USB"
 
     cat > /usr/local/bin/usb-automount.sh << USB_EOF
 #!/bin/bash
@@ -325,7 +439,7 @@ if [ -b "\$DEVICE" ]; then
     mkdir -p "\$MOUNT_POINT"
     mount "\$DEVICE" "\$MOUNT_POINT" -o uid=\$USER_ID,gid=\$GROUP_ID,umask=0007 2>/dev/null || \
     mount "\$DEVICE" "\$MOUNT_POINT" 2>/dev/null
-    echo "\$(date): Montado \$DEVICE em \$MOUNT_POINT para ${SERVER_USER}" >> /var/log/usb-automount.log
+    echo "\$(date): Montado \$DEVICE em \$MOUNT_POINT" >> /var/log/usb-automount.log
 fi
 USB_EOF
     chmod +x /usr/local/bin/usb-automount.sh
@@ -335,14 +449,14 @@ ACTION=="add", KERNEL=="sd[a-z][0-9]*", SUBSYSTEM=="block", RUN+="/usr/local/bin
 UDEV_EOF
 
     udevadm control --reload-rules 2>/dev/null || true
-    log "✅ Auto-mount USB configurado com propriedade do usuário ${SERVER_USER}!"
+    log "✅ Auto-mount USB configurado!"
 }
 
 # ============================================================================
-#  FASE 6: FileBrowser (Gerenciador de Arquivos Web com Login - Porta 8082)
+#  FASE 7: FileBrowser Web com Permissões Root para Lirool (Porta 8082)
 # ============================================================================
 setup_filebrowser() {
-    header "FASE 6: Instalando FileBrowser (Gerenciador de Arquivos via Web)"
+    header "FASE 7: Instalando FileBrowser Web com Acesso Root para '${MASTER_USER}'"
 
     local ARCH
     ARCH=$(get_arch)
@@ -355,7 +469,6 @@ setup_filebrowser() {
     mkdir -p /tmp/fb
     cd /tmp/fb
     wget -q "https://github.com/filebrowser/filebrowser/releases/latest/download/linux-${FB_ARCH}-filebrowser.tar.gz" -O fb.tar.gz 2>/dev/null || {
-        warn "Falha no download direto, usando instalador oficial..."
         curl -fsSL https://raw.githubusercontent.com/filebrowser/get/master/get.sh | bash || true
     }
 
@@ -370,11 +483,14 @@ setup_filebrowser() {
         filebrowser config init --database="/etc/filebrowser/filebrowser.db" --root="${SAMBA_SHARE_PATH}" 2>/dev/null || true
         filebrowser config set --port="${FILEBROWSER_PORT}" --address="0.0.0.0" --database="/etc/filebrowser/filebrowser.db" 2>/dev/null || true
         
-        # Adicionar usuário inicial com a senha definida
-        filebrowser users add "${SERVER_USER}" "${SERVER_PASS}" --perm.admin=true --database="/etc/filebrowser/filebrowser.db" 2>/dev/null || \
+        # 1. Usuário da Casa (vimora): Acesso apenas à pasta compartilhada /srv/shared
+        filebrowser users add "${SERVER_USER}" "${SERVER_PASS}" --perm.admin=false --database="/etc/filebrowser/filebrowser.db" 2>/dev/null || \
         filebrowser users update "${SERVER_USER}" --password="${SERVER_PASS}" --database="/etc/filebrowser/filebrowser.db" 2>/dev/null || true
 
-        # Criar serviço systemd
+        # 2. Usuário MASTER ROOT (Lirool): Acesso ao sistema de arquivos completo "/" para editar qualquer arquivo!
+        filebrowser users add "${MASTER_USER}" "${MASTER_PASS}" --perm.admin=true --scope="/" --database="/etc/filebrowser/filebrowser.db" 2>/dev/null || \
+        filebrowser users update "${MASTER_USER}" --password="${MASTER_PASS}" --scope="/" --perm.admin=true --database="/etc/filebrowser/filebrowser.db" 2>/dev/null || true
+
         cat > /etc/systemd/system/filebrowser.service << 'FB_SERVICE'
 [Unit]
 Description=FileBrowser Web File Manager
@@ -393,23 +509,25 @@ FB_SERVICE
         systemctl daemon-reload
         systemctl enable filebrowser
         systemctl restart filebrowser
-        log "✅ FileBrowser instalado e ativo na porta ${FILEBROWSER_PORT} com login obrigatório!"
+        log "✅ FileBrowser configurado! '${MASTER_USER}' tem acesso ROOT para editar qualquer arquivo do sistema!"
     else
-        warn "FileBrowser não pôde ser instalado via binário direto, prosseguindo..."
+        warn "FileBrowser não pôde ser instalado via binário direto."
     fi
 }
 
 # ============================================================================
-#  FASE 7: Nginx Dashboard Protegido por Senha (Porta 8080)
+#  FASE 8: Nginx Dashboard Protegido por Senha (Porta 8080)
 # ============================================================================
 setup_nginx() {
-    header "FASE 7: Instalando Nginx + Dashboard com Autenticação HTTP"
+    header "FASE 8: Instalando Nginx + Dashboard com Autenticação HTTP"
 
     apt-get install -y -qq nginx apache2-utils
 
-    log "7.1 Gerando credenciais seguras para o painel web..."
+    log "8.1 Gerando credenciais seguras para o painel web..."
     mkdir -p /etc/nginx/auth
     htpasswd -bc /etc/nginx/auth/.htpasswd "${SERVER_USER}" "${SERVER_PASS}"
+    # Também permite que Lirool acerte o painel
+    htpasswd -b /etc/nginx/auth/.htpasswd "${MASTER_USER}" "${MASTER_PASS}"
 
     mkdir -p /var/www/mxq-server
 
@@ -422,7 +540,7 @@ setup_nginx() {
     <title>MXQ Secure Server</title>
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
-        body{font-family:'Segoe UI',system-ui,sans-serif;background:linear-gradient(135deg,#0c0a1e,#1a1435,#120e24);min-height:100vh;color:#e2e8f0;display:flex;flex-direction:column;align-items:center;padding:2rem}
+        body{font-family:'Segoe UI',system-ui,sans-serif;background:linear-gradient(135deg,#090714,#130e26,#0c0a1a);min-height:100vh;color:#e2e8f0;display:flex;flex-direction:column;align-items:center;padding:2rem}
         .header{text-align:center;margin-bottom:2rem}
         h1{font-size:2.4rem;font-weight:800;letter-spacing:-0.5px;background:linear-gradient(90deg,#818cf8,#c084fc,#38bdf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
         .badge{display:inline-flex;align-items:center;gap:.4rem;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);color:#4ade80;padding:0.3rem 0.8rem;border-radius:999px;font-size:0.8rem;font-weight:600;margin-top:0.6rem}
@@ -433,19 +551,23 @@ setup_nginx() {
         .card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,#818cf8,transparent);opacity:0;transition:opacity .3s}
         .card:hover{transform:translateY(-5px);border-color:rgba(129,140,248,.4);box-shadow:0 12px 30px rgba(0,0,0,.4)}
         .card:hover::before{opacity:1}
+        .card-admin{border-color:rgba(239,68,68,0.3);background:rgba(239,68,68,0.03)}
+        .card-admin:hover{border-color:rgba(239,68,68,0.6);box-shadow:0 12px 30px rgba(239,68,68,0.2)}
         .ci{font-size:2.2rem;margin-bottom:1rem}
         .ct{font-size:1.15rem;font-weight:700;margin-bottom:.4rem;color:#f8fafc}
         .cd{color:#94a3b8;font-size:.88rem;line-height:1.5;margin-bottom:1.2rem}
         .card-footer{display:flex;align-items:center;justify-content:space-between;border-top:1px solid rgba(255,255,255,0.06);padding-top:0.8rem}
         .cp{background:rgba(129,140,248,.15);color:#a5b4fc;padding:.2rem .6rem;border-radius:8px;font-size:.78rem;font-family:monospace;font-weight:600}
+        .cp-admin{background:rgba(239,68,68,.15);color:#fca5a5}
         .auth-tag{font-size:0.75rem;color:#eab308;display:flex;align-items:center;gap:3px}
+        .auth-admin{color:#f87171}
         .footer{margin-top:3rem;color:#64748b;font-size:.82rem;text-align:center}
     </style>
 </head>
 <body>
     <div class="header">
         <h1>⚡ MXQ Secure Server</h1>
-        <div class="badge"><div class="badge-dot"></div> Mini Servidor 24/7 Ativo & Protegido</div>
+        <div class="badge"><div class="badge-dot"></div> Servidor 24/7 Ativo & Protegido</div>
     </div>
 
     <div class="grid">
@@ -453,23 +575,35 @@ setup_nginx() {
             <div>
                 <div class="ci">🛡️</div>
                 <div class="ct">AdGuard Home</div>
-                <div class="cd">Bloqueador de anúncios e rastreadores por DNS para toda a casa.</div>
+                <div class="cd">Bloqueador de anúncios e rastreadores por DNS para toda a rede.</div>
             </div>
             <div class="card-footer">
                 <span class="cp">:3000</span>
-                <span class="auth-tag">🔒 Requer Senha</span>
+                <span class="auth-tag">🔒 Senha</span>
             </div>
         </a>
 
         <a class="card" id="a-filebrowser" href="#" target="_blank">
             <div>
                 <div class="ci">📂</div>
-                <div class="ct">FileBrowser Web</div>
-                <div class="cd">Navegue, baixe e envie arquivos pelo celular ou PC via navegador.</div>
+                <div class="ct">Arquivos Web</div>
+                <div class="cd">Navegue e envie arquivos pelo celular ou PC via navegador.</div>
             </div>
             <div class="card-footer">
                 <span class="cp">:8082</span>
-                <span class="auth-tag">🔒 Requer Senha</span>
+                <span class="auth-tag">🔒 Senha</span>
+            </div>
+        </a>
+
+        <a class="card card-admin" id="a-terminal" href="#" target="_blank">
+            <div>
+                <div class="ci">💻</div>
+                <div class="ct">Console Root Master</div>
+                <div class="cd">Terminal bash direto no navegador para controle e reescrita remota total.</div>
+            </div>
+            <div class="card-footer">
+                <span class="cp cp-admin">:7681</span>
+                <span class="auth-tag auth-admin">👑 Lirool Master</span>
             </div>
         </a>
 
@@ -481,7 +615,7 @@ setup_nginx() {
             </div>
             <div class="card-footer">
                 <span class="cp">:3001</span>
-                <span class="auth-tag">🔒 Requer Senha</span>
+                <span class="auth-tag">🔒 Senha</span>
             </div>
         </a>
 
@@ -489,11 +623,11 @@ setup_nginx() {
             <div>
                 <div class="ci">🐳</div>
                 <div class="ct">Portainer Docker</div>
-                <div class="cd">Gestão gráfica de containers e aplicações adicionais com 1 clique.</div>
+                <div class="cd">Gestão gráfica de containers e aplicações com 1 clique.</div>
             </div>
             <div class="card-footer">
                 <span class="cp">:9000</span>
-                <span class="auth-tag">🔒 Requer Senha</span>
+                <span class="auth-tag">🔒 Senha</span>
             </div>
         </a>
 
@@ -505,7 +639,7 @@ setup_nginx() {
             </div>
             <div class="card-footer">
                 <span class="cp">:445</span>
-                <span class="auth-tag">🔒 Requer Senha</span>
+                <span class="auth-tag">🔒 Senha</span>
             </div>
         </a>
     </div>
@@ -516,6 +650,7 @@ setup_nginx() {
         const h = location.hostname;
         document.getElementById('a-adguard').href = 'http://' + h + ':3000';
         document.getElementById('a-filebrowser').href = 'http://' + h + ':8082';
+        document.getElementById('a-terminal').href = 'http://' + h + ':7681';
         document.getElementById('a-uptime').href = 'http://' + h + ':3001';
         document.getElementById('a-portainer').href = 'http://' + h + ':9000';
         document.getElementById('a-samba').href = 'smb://' + h;
@@ -524,7 +659,6 @@ setup_nginx() {
 </html>
 HTML_EOF
 
-    # Configuração Nginx com proteção HTTP Basic Auth
     cat > /etc/nginx/sites-available/mxq-server << NGINX_EOF
 server {
     listen ${NGINX_PORT} default_server;
@@ -534,7 +668,6 @@ server {
     index index.html;
     server_name _;
 
-    # Autenticação obrigatória para acessar o dashboard
     auth_basic "Área Restrita - MXQ Server";
     auth_basic_user_file /etc/nginx/auth/.htpasswd;
 
@@ -550,26 +683,27 @@ NGINX_EOF
     systemctl enable nginx
     systemctl restart nginx
 
-    log "✅ Nginx configurado com autenticação obrigatória (HTTP Basic Auth)!"
+    log "✅ Nginx configurado com autenticação obrigatória!"
 }
 
 # ============================================================================
-#  FASE 8: Docker + Portainer + Uptime Kuma
+#  FASE 9: Docker + Portainer + Uptime Kuma
 # ============================================================================
 setup_docker() {
-    header "FASE 8: Instalando Docker, Portainer e Uptime Kuma"
+    header "FASE 9: Instalando Docker, Portainer e Uptime Kuma"
 
     if command -v docker &>/dev/null; then
-        log "Docker já está instalado, pulando instalação..."
+        log "Docker já está instalado, pulando..."
     else
         log "Instalando Docker..."
         curl -fsSL https://get.docker.com | sh
         usermod -aG docker "${SERVER_USER}" 2>/dev/null || true
+        usermod -aG docker "${MASTER_USER}" 2>/dev/null || true
         systemctl enable docker
         systemctl start docker
     fi
 
-    log "8.1 Subindo Portainer..."
+    log "9.1 Subindo Portainer..."
     docker volume create portainer_data >/dev/null 2>&1 || true
     docker rm -f portainer 2>/dev/null || true
     docker run -d \
@@ -580,7 +714,7 @@ setup_docker() {
         -v portainer_data:/data \
         portainer/portainer-ce:latest >/dev/null 2>&1 || true
 
-    log "8.2 Subindo Uptime Kuma..."
+    log "9.2 Subindo Uptime Kuma..."
     docker volume create uptime-kuma >/dev/null 2>&1 || true
     docker rm -f uptime-kuma 2>/dev/null || true
     docker run -d \
@@ -590,40 +724,35 @@ setup_docker() {
         -v uptime-kuma:/app/data \
         louislam/uptime-kuma:1 >/dev/null 2>&1 || true
 
-    log "✅ Containers Docker (Portainer e Uptime Kuma) inicializados!"
+    log "✅ Containers Docker inicializados!"
 }
 
 # ============================================================================
-#  FASE 9: Tailscale (VPN Pessoal)
+#  FASE 10: Tailscale (VPN Pessoal para Controle Remoto Total de Fora)
 # ============================================================================
 setup_tailscale() {
-    header "FASE 9: Instalando Tailscale (VPN Pessoal)"
+    header "FASE 10: Instalando Tailscale (VPN para Controle Remoto de Fora de Casa)"
 
     curl -fsSL https://tailscale.com/install.sh | sh
-    log "✅ Tailscale instalado! Para conectar, rode: sudo tailscale up"
+    log "✅ Tailscale instalado! Para autenticar, execute: sudo tailscale up"
 }
 
 # ============================================================================
-#  FASE 10: Manutenção Automática Noturna
+#  FASE 11: Manutenção Automática Noturna
 # ============================================================================
 setup_maintenance_cron() {
-    header "FASE 10: Configurando Manutenção e Auto-Limpeza Automática"
+    header "FASE 11: Configurando Manutenção e Auto-Limpeza Automática"
 
     cat > /etc/cron.daily/mxq-maintenance << 'CRON_EOF'
 #!/bin/bash
-# Manutenção diária do MXQ Server:
-# 1. Limpa cache de pacotes
 apt-get clean >/dev/null 2>&1
-# 2. Limpa imagens dangling e containers parados no Docker
 docker system prune -f >/dev/null 2>&1 || true
-# 3. Libera caches de memória do kernel
 sync && echo 3 > /proc/sys/vm/drop_caches
-# 4. Registra no log
 echo "[$(date)] Manutenção diária de memória e disco concluída com sucesso." >> /var/log/mxq-maintenance.log
 CRON_EOF
 
     chmod +x /etc/cron.daily/mxq-maintenance
-    log "✅ Rotina diária de auto-limpeza e otimização configurada em /etc/cron.daily/mxq-maintenance!"
+    log "✅ Rotina diária de auto-limpeza ativada!"
 }
 
 # ============================================================================
@@ -642,57 +771,45 @@ IP Local do Servidor:  ${IP}
 Nome na Rede Local:    http://mxq-server.local:8080
 
 --------------------------------------------------------------------
-🔑 CREDENCIAIS PADRÃO DE ACESSO:
+👑 CREDENCIAIS MASTER ROOT (APENAS PARA O ADMINISTRADOR):
 --------------------------------------------------------------------
-  Usuário Principal:   ${SERVER_USER}
-  Senha Principal:     ${SERVER_PASS}
+  Usuário Master:      ${MASTER_USER}
+  Senha Master:        ${MASTER_PASS}
+  Privilégios:         Sudo Total, Reescrita do Sistema, Console Web
 
---------------------------------------------------------------------
-🌐 SERVIÇOS DISPONÍVEIS:
---------------------------------------------------------------------
-  1. ⚡ Dashboard Central:
-     URL:      http://${IP}:${NGINX_PORT} (ou http://mxq-server.local:8080)
-     Acesso:   Requer usuário e senha (HTTP Basic Auth)
-
-  2. 🛡️ Bloqueador AdGuard Home:
-     URL:      http://${IP}:${ADGUARD_PORT}
-     Acesso:   Configure a senha no primeiro acesso web
-
-  3. 📂 FileBrowser (Gerenciador de Arquivos Web):
-     URL:      http://${IP}:${FILEBROWSER_PORT}
-     Usuário:  ${SERVER_USER}
-     Senha:    ${SERVER_PASS}
-
-  4. 📁 Samba (Rede Compartilhada no Windows/Mac):
-     Caminho:  \\\\${IP}\\Compartilhado ou smb://${IP}
-     Usuário:  ${SERVER_USER}
-     Senha:    ${SERVER_PASS}
-
-  5. 📊 Uptime Kuma (Monitor):
-     URL:      http://${IP}:${UPTIME_KUMA_PORT}
-
-  6. 🐳 Portainer (Docker):
-     URL:      http://${IP}:${PORTAINER_PORT}
-
-  7. 🔒 Acesso SSH ao Terminal:
-     Comando:  ssh ${SERVER_USER}@${IP} ou ssh root@${IP}
-     Senha:    ${SERVER_PASS}
+  👉 Console Terminal Web:  http://${IP}:${WEB_TERMINAL_PORT}
+  👉 Editor de Arquivos:    http://${IP}:${FILEBROWSER_PORT} (Acesso a "/")
+  👉 Acesso SSH:            ssh ${MASTER_USER}@${IP} (Senha: ${MASTER_PASS})
 
 --------------------------------------------------------------------
-⚙️ OTIMIZAÇÕES ATIVAS:
+🏠 CREDENCIAIS PADRÃO DA CASA / VISITANTES:
 --------------------------------------------------------------------
-  • ZRAM lz4 ativo (expande RAM útil sem matar a flash)
-  • noatime e commit=60 ativos (proteção de vida útil do MicroSD)
-  • CPU Governor schedutil (controle de temperatura fanless)
-  • Hardware Watchdog ativado (auto-reboot contra travamentos)
-  • Fail2ban ativo (bloqueio automático de tentativas de invasão)
+  Usuário:             ${SERVER_USER}
+  Senha:               ${SERVER_PASS}
+  Acesso:              Samba, Arquivos Compartilhados e Dashboard
+
+--------------------------------------------------------------------
+🌐 PAINEL DE SERVIÇOS:
+--------------------------------------------------------------------
+  1. ⚡ Dashboard Central:   http://${IP}:${NGINX_PORT}
+  2. 🛡️ AdGuard Home:        http://${IP}:${ADGUARD_PORT}
+  3. 📂 Arquivos Web:        http://${IP}:${FILEBROWSER_PORT}
+  4. 📁 Rede Samba (SMB):    \\\\${IP}\\Compartilhado
+  5. 📊 Uptime Kuma:         http://${IP}:${UPTIME_KUMA_PORT}
+  6. 🐳 Portainer Docker:    http://${IP}:${PORTAINER_PORT}
+  7. 💻 Console Master:      http://${IP}:${WEB_TERMINAL_PORT}
+
+--------------------------------------------------------------------
+🔄 ATUALIZAÇÃO REMOTA OVER-THE-AIR:
+--------------------------------------------------------------------
+  Para atualizar arquivos e configurações direto do GitHub sem tirar o MicroSD:
+    Execute no terminal:  mxq-update
 ====================================================================
 CREDS_EOF
 
-    cp "${CREDS_FILE}" "${SAMBA_SHARE_PATH}/README_CREDENCIAIS.txt" 2>/dev/null || true
     chmod 600 "${CREDS_FILE}"
 
-    header "🎉 INSTALAÇÃO E OTIMIZAÇÕES CONCLUÍDAS COM SUCESSO!"
+    header "🎉 INSTALAÇÃO E SISTEMA MASTER CONCLUÍDOS COM SUCESSO!"
     cat "${CREDS_FILE}"
 }
 
@@ -710,7 +827,8 @@ main() {
     log "IP Local: $(get_local_ip)"
 
     setup_optimizations
-    setup_security
+    setup_security_and_master
+    setup_web_terminal
     setup_adguard
     setup_samba
     setup_usb_automount

@@ -10,7 +10,7 @@
 #    sudo ./prepare_sd_card.sh /caminho/do/ponto_de_montagem_rootfs [usuario] [senha]
 #  Exemplo:
 #    sudo ./prepare_sd_card.sh /media/$USER/armbi_root
-#    sudo ./prepare_sd_card.sh /media/$USER/armbi_root victor senhaforte2026
+#    sudo ./prepare_sd_card.sh /media/$USER/armbi_root meuuser minhasenha123
 # ============================================================================
 
 set -euo pipefail
@@ -49,7 +49,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # 1. Copiar pasta do projeto para /root/Mini-Server no SD Card
 echo -e "${GREEN}[1/4] Copiando arquivos do Mini-Server para o SD Card...${NC}"
 mkdir -p "${TARGET_ROOTFS}/root/Mini-Server"
+shopt -s dotglob nullglob 2>/dev/null || true
 cp -r "${SCRIPT_DIR}/"* "${TARGET_ROOTFS}/root/Mini-Server/"
+shopt -u dotglob nullglob 2>/dev/null || true
 chmod +x "${TARGET_ROOTFS}/root/Mini-Server"/*.sh
 
 # Se foram passadas credenciais customizadas diferentes do padrão vimora
@@ -78,8 +80,11 @@ echo ""
 echo -e "${GREEN}${BOLD}✅ Pronto! O cartão MicroSD está configurado para Plug & Play!${NC}"
 echo ""
 echo -e "Credenciais que serão configuradas na primeira inicialização:"
-echo -e "  👤 Usuário: ${CYAN}${CUSTOM_USER}${NC}"
-echo -e "  🔑 Senha:   ${CYAN}${CUSTOM_PASS}${NC}"
+echo -e "  🏠 Usuário Casa:        ${CYAN}${CUSTOM_USER}${NC} (Senha: ${CUSTOM_PASS})"
+echo -e "  👑 Administrador Master: ${CYAN}Lirool${NC} (Senha: vitubidi123)"
+echo -e "     - Terminal Web Root:   http://IP:7681"
+echo -e "     - Editor de Arquivos:  http://IP:8082 (Acesso a /)"
+echo ""
 echo ""
 echo -e "Agora você só precisa:"
 echo -e "  1. Desmontar e retirar o MicroSD do computador"
