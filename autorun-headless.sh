@@ -52,8 +52,8 @@ if [ -f /root/.not_logged_in_yet ]; then
 fi
 
 # 3. Definir credenciais padrão seguras
-DEFAULT_USER="admin"
-DEFAULT_PASS="admin123"
+DEFAULT_USER="vimora"
+DEFAULT_PASS="aromiv"
 
 echo "root:${DEFAULT_PASS}" | chpasswd
 log "Senha de root definida para '${DEFAULT_PASS}'."

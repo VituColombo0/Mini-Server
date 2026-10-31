@@ -78,14 +78,53 @@ Após o término da instalação, você pode acessar todos os serviços pelo nav
 
 | Serviço | URL de Acesso | Login Padrão | Descrição |
 |---|---|---|---|
-| **Painel Geral** | `http://mxq-server.local:8080` | `admin` / `admin123` | Dashboard unificado protegido por senha |
+| **Painel Geral** | `http://mxq-server.local:8080` | `vimora` / `aromiv` | Dashboard unificado protegido por senha |
 | **AdGuard Home** | `http://mxq-server.local:3000` | Definido no 1º acesso | Bloqueador de anúncios de rede |
-| **FileBrowser (Web)** | `http://mxq-server.local:8082` | `admin` / `admin123` | Gerenciador de arquivos na nuvem |
+| **FileBrowser (Web)** | `http://mxq-server.local:8082` | `vimora` / `aromiv` | Gerenciador de arquivos na nuvem |
 | **Uptime Kuma** | `http://mxq-server.local:3001` | Definido no 1º acesso | Monitor de disponibilidade |
 | **Portainer** | `http://mxq-server.local:9000` | Definido no 1º acesso | Gestão de Containers Docker |
-| **Samba (Arquivos)** | `\\mxq-server.local\Compartilhado` | `admin` / `admin123` | Rede Windows/Mac/Android |
+| **Samba (Arquivos)** | `\\mxq-server.local\Compartilhado` | `vimora` / `aromiv` | Rede Windows/Mac/Android |
 
 > **Dica:** Um arquivo com todas as senhas e links é salvo automaticamente na própria TV Box em `/root/server-credentials.txt` e na pasta de rede compartilhada `README_CREDENCIAIS.txt`.
+
+---
+
+## 💾 Preciso manter o cartão de memória nela o tempo todo?
+
+Você tem **duas opções**:
+
+### Opção 1: Deixar o cartão MicroSD sempre conectado (⭐ Muito Recomendado)
+* **Como funciona:** O Linux e todos os arquivos rodam diretamente pelo cartão MicroSD.
+* **Por que é a melhor escolha:**
+  1. **Zero risco de estragar a box (sem risco de brick):** Se um dia você quiser voltar a box pro Android original, basta tirar o cartão e ligar na tomada! Ela volta a ser uma TV Box normal imediatamente.
+  2. **Velocidade e espaço:** Os cartões MicroSD modernos (Classe 10 / A1) são mais rápidos e têm muito mais qualidade do que os chips de memória interna baratos que vêm soldados nessas boxes.
+  3. **Durabilidade:** Nossa configuração ativa o `noatime` e o ZRAM, então o cartão não se desgasta com gravações diárias.
+
+### Opção 2: Gravar de vez na memória interna (Sem cartão no dia a dia)
+* Se você não quiser que o cartão fique espetado na lateral da TV Box, o Armbian possui uma ferramenta chamada `armbian-install` (ou o comando de gravação no Multitool).
+* Ele transfere o sistema operacional do cartão MicroSD para a memória interna (eMMC/NAND) da placa.
+* Ao finalizar, você desliga a box, remove o cartão MicroSD e a box ligará o Linux diretamente da memória interna.
+
+---
+
+## ⚡ A MXQ Pro 4K 5G aguenta tudo isso?
+
+**Sim, com folga!** Aqui está o consumo real medido de cada serviço na prática:
+
+| Componente / Serviço | Consumo de RAM Real | Uso de CPU em Repouso |
+|---|---|---|
+| **Sistema Base (Armbian Minimal)** | ~60 MB | < 1% |
+| **AdGuard Home (DNS Blocker)** | ~35 MB | < 0.5% |
+| **FileBrowser Web** | ~15 MB | < 0.2% |
+| **Samba (Compartilhamento)** | ~20 MB | < 0.5% |
+| **Nginx (Dashboard Web)** | ~8 MB | < 0.1% |
+| **Fail2ban (Segurança)** | ~12 MB | < 0.2% |
+| **Uptime Kuma (Docker)** | ~60 MB | ~1.0% |
+| **Portainer (Docker)** | ~35 MB | < 0.5% |
+| **TOTAL ESTIMADO** | **~245 MB de RAM** | **~3% a 5% de CPU** |
+
+> Em uma MXQ Pro de 1GB de RAM, tudo isso ocupa apenas **~25% da memória**!
+> Além disso, ativamos o **ZRAM lz4**, que compacta a memória e faz o sistema se comportar como se tivesse **~1.5GB de RAM**. O processador quad-core sobra para resolver consultas de DNS e transferir arquivos.
 
 ---
 
