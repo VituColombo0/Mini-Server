@@ -1,0 +1,16 @@
+[Unit]
+Description=MXQ Pro 4K 5G Headless Bootstrap & Auto-Installer
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/root/Mini-Server
+ExecStart=/bin/bash /root/Mini-Server/autorun-headless.sh
+RemainAfterExit=yes
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=multi-user.target
