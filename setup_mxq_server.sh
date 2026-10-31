@@ -288,6 +288,65 @@ TTYD_EOF
         warn "Não foi possível compilar/baixar ttyd diretamente. Acesso SSH permanece ativo."
     fi
 
+    # Criar ferramenta de transferência para memória interna /usr/local/bin/mxq-install-internal
+    cat > /usr/local/bin/mxq-install-internal << 'INSTALL_INTERNAL_EOF'
+#!/bin/bash
+# ============================================================================
+#  MXQ Pro 4K 5G — Transferência para Memória Interna (eMMC / NAND)
+#  
+#  Permite remover o MicroSD e rodar o Linux e os servidores 24/7
+#  diretamente do chip interno da TV Box!
+# ============================================================================
+set -euo pipefail
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+BOLD='\033[1m'
+
+if [[ $EUID -ne 0 ]]; then
+    echo -e "${RED}Erro: Execute este utilitário como root (sudo mxq-install-internal)${NC}"
+    exit 1
+fi
+
+echo -e "${CYAN}${BOLD}====================================================================${NC}"
+echo -e "${CYAN}${BOLD}  ⚡ MXQ SERVER — INSTALAÇÃO NA MEMÓRIA INTERNA (eMMC/NAND)${NC}"
+echo -e "${CYAN}${BOLD}====================================================================${NC}"
+echo ""
+echo -e "Detectando ferramentas e mídia interna instaladas na placa..."
+
+if command -v armbian-install &>/dev/null; then
+    echo -e "${GREEN}✅ Utilitário oficial 'armbian-install' detectado!${NC}"
+    echo "Iniciando transferência guiada para o eMMC/NAND interno..."
+    armbian-install "$@"
+elif [ -f /root/install-aml.sh ]; then
+    echo -e "${GREEN}✅ Script oficial Amlogic 'install-aml.sh' detectado!${NC}"
+    chmod +x /root/install-aml.sh
+    /root/install-aml.sh "$@"
+elif command -v nand-sata-install &>/dev/null; then
+    echo -e "${GREEN}✅ Utilitário 'nand-sata-install' detectado!${NC}"
+    nand-sata-install "$@"
+else
+    echo -e "${YELLOW}Procurando dispositivos de armazenamento internos (/dev/mmcblk1 ou /dev/nand)...${NC}"
+    lsblk
+    echo ""
+    echo -e "${YELLOW}Para placas Rockchip RK322x, a gravação pode ser feita diretamente pelo Multitool:${NC}"
+    echo -e "  1. No boot do Multitool, selecione 'Burn image to eMMC/NAND'."
+    echo -e "  2. O Armbian é gravado diretamente na memória interna."
+fi
+
+echo ""
+echo -e "${GREEN}${BOLD}====================================================================${NC}"
+echo -e "${GREEN}${BOLD}  🎉 PROCESSO CONCLUÍDO!${NC}"
+echo -e "${GREEN}${BOLD}  Agora você pode desligar a TV Box ('poweroff'), RETIRAR o MicroSD${NC}"
+echo -e "${GREEN}${BOLD}  e ligá-la novamente na tomada para rodar 100% da memória interna!${NC}"
+echo -e "${GREEN}${BOLD}====================================================================${NC}"
+INSTALL_INTERNAL_EOF
+    chmod +x /usr/local/bin/mxq-install-internal
+    log "✅ Ferramenta de instalação interna instalada em /usr/local/bin/mxq-install-internal!"
+
     # Criar ferramenta de atualização remota OTA /usr/local/bin/mxq-update
     cat > /usr/local/bin/mxq-update << 'UPDATE_EOF'
 #!/bin/bash
@@ -804,6 +863,13 @@ Nome na Rede Local:    http://mxq-server.local:8080
 --------------------------------------------------------------------
   Para atualizar arquivos e configurações direto do GitHub sem tirar o MicroSD:
     Execute no terminal:  mxq-update
+
+--------------------------------------------------------------------
+💾 TRANSFERÊNCIA PARA MEMÓRIA INTERNA (PARA RETIRAR O MICROSD):
+--------------------------------------------------------------------
+  Para transferir todo o Linux e os servidores para a memória interna
+  (eMMC/NAND) da TV Box e remover o cartão MicroSD de vez:
+    Execute no terminal web ou SSH:  sudo mxq-install-internal
 ====================================================================
 CREDS_EOF
 

@@ -267,6 +267,9 @@ Você pode mudar o DNS **manualmente em cada dispositivo**:
 
 🔄  Atualização da Nuvem →  No terminal web ou SSH, execute: mxq-update --apply
     ↳ Faz git pull do GitHub e reaplica os scripts automaticamente!
+
+💾  Gravar na Memória    →  No terminal web ou SSH, execute: sudo mxq-install-internal
+    ↳ Transfere tudo para o chip interno para você poder RETIRAR o MicroSD de vez!
 ```
 
 ### Testar compartilhamento de arquivos:

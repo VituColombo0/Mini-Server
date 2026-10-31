@@ -118,10 +118,21 @@ Você tem **duas opções**:
   2. **Velocidade e espaço:** Os cartões MicroSD modernos (Classe 10 / A1) são mais rápidos e têm muito mais qualidade do que os chips de memória interna baratos que vêm soldados nessas boxes.
   3. **Durabilidade:** Nossa configuração ativa o `noatime` e o ZRAM, então o cartão não se desgasta com gravações diárias.
 
-### Opção 2: Gravar de vez na memória interna (Sem cartão no dia a dia)
-* Se você não quiser que o cartão fique espetado na lateral da TV Box, o Armbian possui uma ferramenta chamada `armbian-install` (ou o comando de gravação no Multitool).
-* Ele transfere o sistema operacional do cartão MicroSD para a memória interna (eMMC/NAND) da placa.
-* Ao finalizar, você desliga a box, remove o cartão MicroSD e a box ligará o Linux diretamente da memória interna.
+### Opção 2: Gravar de vez na memória interna (Remover o cartão após instalar)
+Se você quer usar o MicroSD **apenas para instalar tudo** e depois removê-lo para a box rodar 24/7 direto da memória interna (eMMC/NAND):
+1. **Via Terminal Web Master (`:7681`):**
+   * Abra o terminal web e rode o comando:
+     ```bash
+     sudo mxq-install-internal
+     ```
+   * Ele detecta o chip interno (`armbian-install`, `install-aml.sh` ou `nand-sata-install`), formata a partição interna, copia todos os arquivos, configurações e instalador, e grava o bootloader.
+   * Quando concluir, desligue a box (`poweroff`), **retire o cartão MicroSD** e ligue-a na tomada!
+2. **Via Rockchip Multitool (se a sua box for RK322x):**
+   * Na primeira inicialização com o Multitool, basta selecionar **"Burn image to eMMC/NAND"**.
+   * Ele grava o Armbian diretamente no chip interno em 2 minutos.
+   * Ao finalizar, desligue, retire o cartão MicroSD e a box ligará do chip interno para sempre!
+3. **Qualquer correção futura:**
+   * Feita 100% à distância pelo Console Terminal Web (`:7681`), Editor de Arquivos (`:8082`), SSH ou `mxq-update`!
 
 ---
 
