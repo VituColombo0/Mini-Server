@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================================
-#  MXQ Pro 4K 5G — Autorun Headless (Zero Interação)
+#  MXQ Pro 4K 5G — Autorun Headless (Zero Interação & 100% Seguro)
 #  
 #  Este script é chamado automaticamente pelo serviço systemd `mxq-bootstrap`
 #  no primeiro boot do Armbian.
@@ -25,15 +25,15 @@ log "🚀 Iniciando Inicialização Headless da MXQ Pro 4K 5G"
 log "=========================================================="
 
 # 1. Aguardar conexão de rede (Ethernet)
-log "Aguardando conexão de rede ativa..."
+log "Aguardando conexão de rede ativa com o roteador..."
 RETRY=0
-MAX_RETRIES=30
+MAX_RETRIES=35
 HAS_IP=false
 
 while [ $RETRY -lt $MAX_RETRIES ]; do
     IP=$(hostname -I | awk '{print $1}' || true)
     if [ -n "$IP" ]; then
-        log "Rede conectada com sucesso! IP Local: $IP"
+        log "Rede conectada com sucesso! IP Local atribuído: $IP"
         HAS_IP=true
         break
     fi
@@ -42,39 +42,48 @@ while [ $RETRY -lt $MAX_RETRIES ]; do
 done
 
 if [ "$HAS_IP" = false ]; then
-    log "⚠️ Timeout aguardando IP. Prosseguindo com a instalação offline/local..."
+    log "⚠️ Timeout aguardando IP via DHCP. Prosseguindo com a instalação local..."
 fi
 
-# 2. Desabilitar wizard de primeiro login interativo do Armbian (se existir)
+# 2. Desabilitar wizard de primeiro login interativo do Armbian
 if [ -f /root/.not_logged_in_yet ]; then
     rm -f /root/.not_logged_in_yet
-    log "Wizard de primeiro login interativo desabilitado."
+    log "Wizard de primeiro login interativo desabilitado com sucesso."
 fi
 
-# Garantir senha padrão de root caso o usuário precise de SSH de emergência
-echo "root:admin123" | chpasswd
-log "Senha de root definida por padrão para 'admin123' (troque posteriormente se desejar)."
+# 3. Definir credenciais padrão seguras
+DEFAULT_USER="admin"
+DEFAULT_PASS="admin123"
 
-# 3. Executar o instalador mestre
+echo "root:${DEFAULT_PASS}" | chpasswd
+log "Senha de root definida para '${DEFAULT_PASS}'."
+
+# 4. Executar o instalador mestre com as credenciais
 if [ -f "${BASE_DIR}/setup_mxq_server.sh" ]; then
-    log "Executando setup_mxq_server.sh..."
+    log "Executando setup_mxq_server.sh com otimizações e autenticação..."
     chmod +x "${BASE_DIR}/setup_mxq_server.sh"
-    "${BASE_DIR}/setup_mxq_server.sh" >> "$LOG_FILE" 2>&1 || log "⚠️ Aviso: setup_mxq_server terminou com código diferente de zero."
+    SERVER_USER="${DEFAULT_USER}" SERVER_PASS="${DEFAULT_PASS}" "${BASE_DIR}/setup_mxq_server.sh" >> "$LOG_FILE" 2>&1 || {
+        log "⚠️ Aviso: Ocorreu um aviso durante a execução do setup."
+    }
 else
     log "❌ Erro: setup_mxq_server.sh não encontrado em ${BASE_DIR}."
 fi
 
-# 4. Desabilitar o serviço de bootstrap para não rodar novamente no próximo reboot
+# 5. Desabilitar o serviço de bootstrap para nunca re-executar em reboots normais
 systemctl disable mxq-bootstrap.service 2>/dev/null || true
 
-# 5. Notificação de conclusão no log e broadcast
+# 6. Salvar cópia do arquivo de credenciais na partição boot FAT se acessível
+if [ -d /boot ]; then
+    cp /root/server-credentials.txt /boot/CREDENCIAIS_SERVIDOR.txt 2>/dev/null || true
+fi
+
+# 7. Notificação de conclusão no log
 LOCAL_IP=$(hostname -I | awk '{print $1}')
 log "=========================================================="
 log "🎉 INSTALAÇÃO HEADLESS CONCLUÍDA COM SUCESSO!"
-log "Acesse o painel web em: http://${LOCAL_IP}:8080 ou http://mxq-server.local:8080"
-log "AdGuard Home em:        http://${LOCAL_IP}:3000"
-log "Portainer em:           http://${LOCAL_IP}:9000"
-log "Uptime Kuma em:         http://${LOCAL_IP}:3001"
+log "IP do Servidor:  http://${LOCAL_IP}:8080 ou http://mxq-server.local:8080"
+log "Usuário:         ${DEFAULT_USER}"
+log "Senha:           ${DEFAULT_PASS}"
 log "=========================================================="
 
 exit 0

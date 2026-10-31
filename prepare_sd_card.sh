@@ -7,9 +7,10 @@
 #  eliminando a necessidade de monitor, teclado ou controle remoto na TV Box!
 #  
 #  Uso:
-#    sudo ./prepare_sd_card.sh /caminho/do/ponto_de_montagem_rootfs
+#    sudo ./prepare_sd_card.sh /caminho/do/ponto_de_montagem_rootfs [usuario] [senha]
 #  Exemplo:
 #    sudo ./prepare_sd_card.sh /media/$USER/armbi_root
+#    sudo ./prepare_sd_card.sh /media/$USER/armbi_root meuuser minhasenha123
 # ============================================================================
 
 set -euo pipefail
@@ -22,12 +23,15 @@ NC='\033[0m'
 BOLD='\033[1m'
 
 if [ "$#" -lt 1 ]; then
-    echo -e "${YELLOW}Uso: sudo $0 <ponto_de_montagem_da_particao_rootfs>${NC}"
+    echo -e "${YELLOW}Uso: sudo $0 <ponto_de_montagem_da_particao_rootfs> [usuario] [senha]${NC}"
     echo "Exemplo: sudo $0 /media/$USER/armbi_root"
+    echo "Exemplo: sudo $0 /media/$USER/armbi_root victor senhaforte2026"
     exit 1
 fi
 
 TARGET_ROOTFS="$1"
+CUSTOM_USER="${2:-admin}"
+CUSTOM_PASS="${3:-admin123}"
 
 if [ ! -d "${TARGET_ROOTFS}/etc" ] || [ ! -d "${TARGET_ROOTFS}/root" ]; then
     echo -e "${RED}Erro: '${TARGET_ROOTFS}' não parece ser a partição rootfs do Linux!${NC}"
@@ -37,6 +41,7 @@ fi
 
 echo -e "${CYAN}${BOLD}======================================================${NC}"
 echo -e "${CYAN}${BOLD} Preparando MicroSD para Inicialização 100% Headless${NC}"
+echo -e "${CYAN}${BOLD} Usuário do Servidor: ${CUSTOM_USER}${NC}"
 echo -e "${CYAN}${BOLD}======================================================${NC}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -46,6 +51,12 @@ echo -e "${GREEN}[1/4] Copiando arquivos do Mini-Server para o SD Card...${NC}"
 mkdir -p "${TARGET_ROOTFS}/root/Mini-Server"
 cp -r "${SCRIPT_DIR}/"* "${TARGET_ROOTFS}/root/Mini-Server/"
 chmod +x "${TARGET_ROOTFS}/root/Mini-Server"/*.sh
+
+# Se foram passadas credenciais customizadas, injeta no script autorun
+if [ "$CUSTOM_USER" != "admin" ] || [ "$CUSTOM_PASS" != "admin123" ]; then
+    sed -i "s/DEFAULT_USER=\"admin\"/DEFAULT_USER=\"${CUSTOM_USER}\"/g" "${TARGET_ROOTFS}/root/Mini-Server/autorun-headless.sh"
+    sed -i "s/DEFAULT_PASS=\"admin123\"/DEFAULT_PASS=\"${CUSTOM_PASS}\"/g" "${TARGET_ROOTFS}/root/Mini-Server/autorun-headless.sh"
+fi
 
 # 2. Instalar e habilitar o serviço systemd de primeiro boot
 echo -e "${GREEN}[2/4] Configurando serviço de bootstrap automático...${NC}"
@@ -65,6 +76,10 @@ sync
 
 echo ""
 echo -e "${GREEN}${BOLD}✅ Pronto! O cartão MicroSD está configurado para Plug & Play!${NC}"
+echo ""
+echo -e "Credenciais que serão configuradas na primeira inicialização:"
+echo -e "  👤 Usuário: ${CYAN}${CUSTOM_USER}${NC}"
+echo -e "  🔑 Senha:   ${CYAN}${CUSTOM_PASS}${NC}"
 echo ""
 echo -e "Agora você só precisa:"
 echo -e "  1. Desmontar e retirar o MicroSD do computador"
