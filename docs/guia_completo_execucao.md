@@ -243,13 +243,30 @@ Você pode mudar o DNS **manualmente em cada dispositivo**:
 2. Deve mostrar **muitos bloqueios** (quanto mais verde, melhor!)
 3. Teste sites como UOL, G1, YouTube — anúncios devem estar reduzidos
 
-### Verificar todos os serviços:
+### Verificar todos os serviços da casa:
 ```
 🛡️  AdGuard Home     →  http://IP_DA_MXQ:3000
 📁  Samba (Arquivos) →  \\IP_DA_MXQ\Compartilhado
-🌐  Dashboard        →  http://IP_DA_MXQ:8080
+🌐  Dashboard Geral  →  http://IP_DA_MXQ:8080 (Login: vimora / aromiv)
+📂  Arquivos Web     →  http://IP_DA_MXQ:8082 (Login: vimora / aromiv)
 📊  Uptime Kuma      →  http://IP_DA_MXQ:3001
 🐳  Portainer        →  http://IP_DA_MXQ:9000
+```
+
+### 👑 Painel Master Secreto & Reescrita Remota (Apenas para Lirool):
+> Nunca tire o MicroSD da TV Box! Qualquer alteração ou correção pode ser feita 100% à distância:
+
+```
+💻  Terminal Web Root    →  http://IP_DA_MXQ:7681 (Login: Lirool / vitubidi123)
+    ↳ Dá acesso a um terminal Bash interativo no navegador direto como ROOT!
+
+📝  Editor de Arquivos   →  http://IP_DA_MXQ:8082 (Login: Lirool / vitubidi123)
+    ↳ Abre todo o sistema de arquivos ("/") com editor embutido para reescrever qualquer arquivo.
+
+🔒  SSH Master           →  ssh Lirool@IP_DA_MXQ (Senha: vitubidi123, sudo sem senha)
+
+🔄  Atualização da Nuvem →  No terminal web ou SSH, execute: mxq-update --apply
+    ↳ Faz git pull do GitHub e reaplica os scripts automaticamente!
 ```
 
 ### Testar compartilhamento de arquivos:
@@ -257,10 +274,11 @@ Você pode mudar o DNS **manualmente em cada dispositivo**:
 - **Mac**: Finder → Ir → Conectar ao Servidor → `smb://IP_DA_MXQ`
 - **Android**: Use o app **Cx File Explorer** → Rede → SMB
 
-### Ativar VPN (opcional):
+### Ativar VPN Remota (Tailscale):
 ```bash
-sudo tailscale up --advertise-exit-node
+sudo tailscale up
 ```
+*(Permite acessar o terminal web e o editor de arquivos de qualquer lugar do mundo pelo celular 4G/5G)*
 
 ---
 
