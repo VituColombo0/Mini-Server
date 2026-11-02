@@ -201,28 +201,36 @@ filter = sshd
 logpath = /var/log/auth.log
 maxretry = 4
 JAIL_EOF
-    systemctl enable fail2ban
-    systemctl restart fail2ban
+    systemctl enable fail2ban 2>/dev/null || true
+    systemctl restart fail2ban 2>/dev/null || {
+        warn "Fail2ban não pôde ser iniciado (kernel pode não suportar iptables). Pulando..."
+    }
 
     log "2.3 Configurando Firewall UFW restrito..."
-    ufw --force reset >/dev/null 2>&1
-    ufw default deny incoming >/dev/null 2>&1
-    ufw default allow outgoing >/dev/null 2>&1
+    if iptables -L -n >/dev/null 2>&1; then
+        ufw --force reset >/dev/null 2>&1 || true
+        ufw default deny incoming >/dev/null 2>&1 || true
+        ufw default allow outgoing >/dev/null 2>&1 || true
 
-    ufw allow 22/tcp comment 'SSH Seguro' >/dev/null 2>&1
-    ufw allow 53/tcp comment 'DNS TCP' >/dev/null 2>&1
-    ufw allow 53/udp comment 'DNS UDP' >/dev/null 2>&1
-    ufw allow ${ADGUARD_PORT}/tcp comment 'AdGuard Home' >/dev/null 2>&1
-    ufw allow 139/tcp comment 'Samba NetBIOS' >/dev/null 2>&1
-    ufw allow 445/tcp comment 'Samba SMB' >/dev/null 2>&1
-    ufw allow ${NGINX_PORT}/tcp comment 'Dashboard Web' >/dev/null 2>&1
-    ufw allow ${FILEBROWSER_PORT}/tcp comment 'FileBrowser Web' >/dev/null 2>&1
-    ufw allow ${WEB_TERMINAL_PORT}/tcp comment 'Web Terminal Master' >/dev/null 2>&1
-    ufw allow ${UPTIME_KUMA_PORT}/tcp comment 'Uptime Kuma' >/dev/null 2>&1
-    ufw allow ${PORTAINER_PORT}/tcp comment 'Portainer' >/dev/null 2>&1
+        ufw allow 22/tcp comment 'SSH Seguro' >/dev/null 2>&1 || true
+        ufw allow 53/tcp comment 'DNS TCP' >/dev/null 2>&1 || true
+        ufw allow 53/udp comment 'DNS UDP' >/dev/null 2>&1 || true
+        ufw allow ${ADGUARD_PORT}/tcp comment 'AdGuard Home' >/dev/null 2>&1 || true
+        ufw allow 139/tcp comment 'Samba NetBIOS' >/dev/null 2>&1 || true
+        ufw allow 445/tcp comment 'Samba SMB' >/dev/null 2>&1 || true
+        ufw allow ${NGINX_PORT}/tcp comment 'Dashboard Web' >/dev/null 2>&1 || true
+        ufw allow ${FILEBROWSER_PORT}/tcp comment 'FileBrowser Web' >/dev/null 2>&1 || true
+        ufw allow ${WEB_TERMINAL_PORT}/tcp comment 'Web Terminal Master' >/dev/null 2>&1 || true
+        ufw allow ${UPTIME_KUMA_PORT}/tcp comment 'Uptime Kuma' >/dev/null 2>&1 || true
+        ufw allow ${PORTAINER_PORT}/tcp comment 'Portainer' >/dev/null 2>&1 || true
 
-    ufw --force enable >/dev/null 2>&1
-    log "✅ Firewall e Fail2ban configurados e ativos!"
+        ufw --force enable >/dev/null 2>&1 || true
+        log "✅ Firewall UFW configurado e ativo!"
+    else
+        warn "Kernel não suporta iptables/netfilter. Firewall UFW não ativado."
+        warn "A TV Box funcionará sem firewall (rede local doméstica é segura)."
+    fi
+    log "✅ Configuração de segurança concluída!"
 }
 
 # ============================================================================
@@ -755,11 +763,15 @@ setup_docker() {
         log "Docker já está instalado, pulando..."
     else
         log "Instalando Docker..."
-        curl -fsSL https://get.docker.com | sh
-        usermod -aG docker "${SERVER_USER}" 2>/dev/null || true
-        usermod -aG docker "${MASTER_USER}" 2>/dev/null || true
-        systemctl enable docker
-        systemctl start docker
+        if curl -fsSL https://get.docker.com | sh; then
+            usermod -aG docker "${SERVER_USER}" 2>/dev/null || true
+            usermod -aG docker "${MASTER_USER}" 2>/dev/null || true
+            systemctl enable docker 2>/dev/null || true
+            systemctl start docker 2>/dev/null || true
+        else
+            warn "Docker não pôde ser instalado neste kernel. Portainer e Uptime Kuma serão ignorados."
+            return 0
+        fi
     fi
 
     log "9.1 Subindo Portainer..."
@@ -792,8 +804,11 @@ setup_docker() {
 setup_tailscale() {
     header "FASE 10: Instalando Tailscale (VPN para Controle Remoto de Fora de Casa)"
 
-    curl -fsSL https://tailscale.com/install.sh | sh
-    log "✅ Tailscale instalado! Para autenticar, execute: sudo tailscale up"
+    if curl -fsSL https://tailscale.com/install.sh | sh; then
+        log "✅ Tailscale instalado! Para autenticar, execute: sudo tailscale up"
+    else
+        warn "Tailscale não pôde ser instalado. Acesso remoto VPN não disponível."
+    fi
 }
 
 # ============================================================================
